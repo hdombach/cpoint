@@ -46,6 +46,7 @@ namespace cg {
 					return _last_failure;
 				}
 			} else {
+				node.compress(_ctx->prim_names());
 				return node;
 			}
 		} catch_kerror;

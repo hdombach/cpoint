@@ -1,0 +1,195 @@
+digraph graphname {
+label="Program output"
+ast_1 [label="<statements>"];
+ast_2 [label="<statement>"];
+ast_3 [label="<declaration>"];
+ast_9 [label="\"int\"
+"];
+ast_58 [label="<whitespace>"];
+ast_59 [label="\" \"
+"];
+ast_65 [label="<identifier>"];
+ast_70 [label="\"v\"
+"];
+ast_75 [label="\"a\"
+"];
+ast_80 [label="\"l\"
+"];
+ast_85 [label="\"u\"
+"];
+ast_90 [label="\"e\"
+"];
+ast_123 [label="\";\"
+"];
+ast_126 [label="<whitespace>"];
+ast_127 [label="\"\n\"
+"];
+ast_130 [label="<whitespace>"];
+ast_131 [label="\"\n\"
+"];
+ast_137 [label="<statements>"];
+ast_270 [label="<statement>"];
+ast_271 [label="<declaration>"];
+ast_277 [label="\"int\"
+"];
+ast_326 [label="<whitespace>"];
+ast_327 [label="\" \"
+"];
+ast_333 [label="<identifier>"];
+ast_338 [label="\"v\"
+"];
+ast_343 [label="\"a\"
+"];
+ast_348 [label="\"l\"
+"];
+ast_353 [label="\"u\"
+"];
+ast_358 [label="\"e\"
+"];
+ast_367 [label="\"2\"
+"];
+ast_379 [label="<whitespace>"];
+ast_380 [label="\" \"
+"];
+ast_402 [label="\"=\"
+"];
+ast_403 [label="<expression>"];
+ast_404 [label="<whitespace>"];
+ast_405 [label="\" \"
+"];
+ast_418 [label="<exp_int>"];
+ast_420 [label="\"5\"
+"];
+ast_426 [label="\";\"
+"];
+ast_429 [label="<whitespace>"];
+ast_430 [label="\"\n\"
+"];
+ast_433 [label="<whitespace>"];
+ast_434 [label="\"\n\"
+"];
+ast_440 [label="<statements>"];
+ast_619 [label="<statement>"];
+ast_620 [label="<declaration>"];
+ast_626 [label="\"int\"
+"];
+ast_675 [label="<whitespace>"];
+ast_676 [label="\" \"
+"];
+ast_682 [label="<identifier>"];
+ast_687 [label="\"t\"
+"];
+ast_692 [label="\"e\"
+"];
+ast_697 [label="\"r\"
+"];
+ast_702 [label="\"n\"
+"];
+ast_707 [label="\"a\"
+"];
+ast_712 [label="\"r\"
+"];
+ast_717 [label="\"y\"
+"];
+ast_727 [label="\"_\"
+"];
+ast_732 [label="\"p\"
+"];
+ast_737 [label="\"t\"
+"];
+ast_742 [label="\"r\"
+"];
+ast_767 [label="<decl_ternary>"];
+ast_773 [label="\"?\"
+"];
+ast_774 [label="<whitespace>"];
+ast_775 [label="\" \"
+"];
+ast_797 [label="\"=\"
+"];
+ast_798 [label="<expression>"];
+ast_799 [label="<whitespace>"];
+ast_800 [label="\" \"
+"];
+ast_813 [label="<exp_int>"];
+ast_815 [label="\"4\"
+"];
+ast_821 [label="\";\"
+"];
+ast_824 [label="<whitespace>"];
+ast_825 [label="\"\n\"
+"];
+ast_1 -> ast_2;
+ast_2 -> ast_3;
+ast_3 -> ast_9;
+ast_3 -> ast_58;
+ast_58 -> ast_59;
+ast_3 -> ast_65;
+ast_65 -> ast_70;
+ast_65 -> ast_75;
+ast_65 -> ast_80;
+ast_65 -> ast_85;
+ast_65 -> ast_90;
+ast_2 -> ast_123;
+ast_2 -> ast_126;
+ast_126 -> ast_127;
+ast_126 -> ast_130;
+ast_130 -> ast_131;
+ast_1 -> ast_137;
+ast_137 -> ast_270;
+ast_270 -> ast_271;
+ast_271 -> ast_277;
+ast_271 -> ast_326;
+ast_326 -> ast_327;
+ast_271 -> ast_333;
+ast_333 -> ast_338;
+ast_333 -> ast_343;
+ast_333 -> ast_348;
+ast_333 -> ast_353;
+ast_333 -> ast_358;
+ast_333 -> ast_367;
+ast_271 -> ast_379;
+ast_379 -> ast_380;
+ast_270 -> ast_402;
+ast_270 -> ast_403;
+ast_403 -> ast_404;
+ast_404 -> ast_405;
+ast_403 -> ast_418;
+ast_418 -> ast_420;
+ast_270 -> ast_426;
+ast_270 -> ast_429;
+ast_429 -> ast_430;
+ast_429 -> ast_433;
+ast_433 -> ast_434;
+ast_137 -> ast_440;
+ast_440 -> ast_619;
+ast_619 -> ast_620;
+ast_620 -> ast_626;
+ast_620 -> ast_675;
+ast_675 -> ast_676;
+ast_620 -> ast_682;
+ast_682 -> ast_687;
+ast_682 -> ast_692;
+ast_682 -> ast_697;
+ast_682 -> ast_702;
+ast_682 -> ast_707;
+ast_682 -> ast_712;
+ast_682 -> ast_717;
+ast_682 -> ast_727;
+ast_682 -> ast_732;
+ast_682 -> ast_737;
+ast_682 -> ast_742;
+ast_620 -> ast_767;
+ast_767 -> ast_773;
+ast_767 -> ast_774;
+ast_774 -> ast_775;
+ast_619 -> ast_797;
+ast_619 -> ast_798;
+ast_798 -> ast_799;
+ast_799 -> ast_800;
+ast_798 -> ast_813;
+ast_813 -> ast_815;
+ast_619 -> ast_821;
+ast_619 -> ast_824;
+ast_824 -> ast_825;
+}

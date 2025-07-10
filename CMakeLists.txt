@@ -23,6 +23,7 @@ add_subdirectory(src/codegen)
 
 set(SOURCES
 	src/cpoint.cpp
+	src/Grammar.cpp
 )
 
 add_executable(cpoint ${SOURCES})
