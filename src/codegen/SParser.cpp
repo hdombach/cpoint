@@ -2,57 +2,74 @@
 
 #include "util/KError.hpp"
 #include "util/StringRef.hpp"
-#include "util/Util.hpp"
+#include "util/log.hpp"
 #include "util/log.hpp"
 #include "util/result.hpp"
 #include "CfgContext.hpp"
 #include "AstNode.hpp"
 
 namespace cg {
-	SParser::SParser(CfgContext const &ctx):
-		_uid(0),
-		_ctx(&ctx)
-	{}
-
-	util::Result<size_t, KError> SParser::match(
-		std::string const &str,
-		std::string const &root_node
-	) {
-		try {
-			log_assert(_ctx, "SParser is not initialized");
-			auto ref = util::StringRef(str.c_str(), "codegen");
-			return parse(str, root_node)->size();
-		} catch_kerror;
+	SParser::Ptr SParser::create(std::unique_ptr<CfgContext> &&ctx) {
+		auto parser = std::make_unique<SParser>();;
+		parser->_ctx = std::move(ctx);
+		return parser;
 	}
 
-	util::Result<AstNode, KError> SParser::parse(
-		std::string const &str,
-		std::string const &root_node,
-		std::string const &filename
+	SParser::SParser(SParser &&other) {
+		_ctx = std::move(other._ctx);
+	}
+
+	SParser &SParser::operator=(SParser &&other) {
+		_ctx = std::move(other._ctx);
+		return *this;
+	}
+
+	util::Result<AstNode*, KError> SParser::parse(
+		util::StringRef const &str,
+		ParserContext &parser_ctx
+	) {
+		return SParserInstance::parse(str, *_ctx, parser_ctx);
+	}
+
+	CfgContext const &SParser::cfg() const {
+		return *_ctx;
+	}
+
+	CfgContext &SParser::cfg() {
+		return *_ctx;
+	}
+
+	util::Result<AstNode*, KError> SParserInstance::parse(
+		util::StringRef const &str,
+		CfgContext const &cfg_ctx,
+		ParserContext &parser_ctx
 	) {
 		try {
-			log_assert(_ctx, "SParser is not initialized");
+			auto instance = SParserInstance();
+			instance._cfg_ctx = &cfg_ctx;
+			instance._parser_ctx = &parser_ctx;
+
+			auto &tokens = instance._parser_ctx->get_tokens(str);
+			log_assert(static_cast<bool>(instance._cfg_ctx), "SParser is not initialized");
 			// _last_failure is a value specific to this function but it is easier to
 			// pass it around everywhere as a property.
 			// Should be fine since can't call multiple parses at same time.
-			_last_failure = KError();
-			auto ref = util::StringRef(str.c_str(), filename.c_str());
+			instance._last_failure = KError();
 			//TODO: error handling for root
-			auto node = _parse(Stack(ref, "", nullptr), *_ctx->get(root_node)).value();
-			if (node.size() < str.size()) {
-				if (_last_failure.type() == KError::Type::UNKNOWN) {
+			auto node = instance._parse(tokens, 0, *instance._cfg_ctx->get_root()).value();
+			if (node->leaf_count() < tokens.size()) {
+				if (instance._last_failure.type() == KError::Type::UNKNOWN) {
 					return KError::codegen("Not all characters were consumed");
 				} else {
-					return _last_failure;
+					return instance._last_failure;
 				}
 			} else {
-				node.compress(_ctx->prim_names());
 				return node;
 			}
 		} catch_kerror;
 	}
 
-	KError SParser::_set_failure(KError const &failure) {
+	KError SParserInstance::_set_failure(KError const &failure) {
 		if (_last_failure.type() == KError::Type::UNKNOWN) {
 			_last_failure = failure;
 		} else if (failure.loc() > _last_failure.loc()) {
@@ -65,43 +82,48 @@ namespace cg {
 	 * Parser helper functions
 	 * *********************************/
 
-	util::Result<AstNode, KError> SParser::_parse(
-		Stack const &s,
+	util::Result<AstNode*, KError> SParserInstance::_parse(
+		std::vector<Token> const &tokens,
+		uint32_t i,
 		CfgRuleSet const &set
 	) {
-		log_trace() << "Parsing rule set: " << set.name() << std::endl;
+		log_trace() << "Parsing rule set: " << set << std::endl;
 		for (auto &rule : set.rules()) {
-			if (auto node = _parse(s.child(0, set.name()), rule)) {
+			if (auto node = _parse(tokens, i, rule, set.name())) {
 				return node;
 			}
 		}
+		log_trace() << "Rule set " << set.name() << " failed." << std::endl;
 		return _last_failure;
 	}
 
-	util::Result<AstNode, KError> SParser::_parse(
-		Stack const &s,
-		CfgRule const &rule
+	util::Result<AstNode*, KError> SParserInstance::_parse(
+		std::vector<Token> const &tokens,
+		uint32_t i,
+		CfgRule const &rule,
+		std::string const &set_name
 	) {
 		log_trace() << "Parsing rule: " << rule << std::endl;
 
-		auto node = AstNode::create_rule(++_uid, s.rule, s.str.location());
-		uint32_t i = 0;
+		auto &node = _parser_ctx->create_rule_node(set_name);
 		for (auto &leaf : rule.leaves()) {
-			if (auto child = _parse(s.child(node.size()), leaf)) {
-				node.add_child(child.value());
+			if (auto child = _parse(tokens, i, leaf)) {
+				i += child.value()->leaf_count();
+				node.add_child(*child.value());
 			} else {
 				return _set_failure(child.error());
 			}
 		}
-		return node;
+		return &node;
 	}
 
-	util::Result<AstNode, KError> SParser::_parse(
-		Stack const &s,
+	util::Result<AstNode*, KError> SParserInstance::_parse(
+		std::vector<Token> const &tokens,
+		uint32_t i,
 		CfgLeaf const &leaf
 	) {
 		if (leaf.type() == CfgLeaf::Type::var) {
-			auto set = _ctx->get(leaf.var_name());
+			auto set = _cfg_ctx->get(leaf.var_name());
 			if (set == nullptr) {
 				auto msg = util::f(
 					"Variable ",
@@ -110,26 +132,25 @@ namespace cg {
 				);
 				return _set_failure(KError::codegen(msg));
 			}
-			return _parse(s.child(0, leaf.var_name()), *set);
+			return _parse(tokens, i, *set);
+		} else if (leaf.type() == CfgLeaf::Type::empty) {
+			return &_parser_ctx->create_node();
 		}
 
-		auto parsed = leaf.match(s.str.str());
-		if (parsed) {
-			auto begin = s.str.str();
-			auto end = s.str.str() + parsed.value();
+		auto &token = tokens[i];
+
+		if (leaf.token_type() == token.type()) {
 			log_trace()
 				<< "leaf " << leaf
-				<< " matched: \"" << util::escape_str({begin, end}) << "\"" << std::endl;
-			return AstNode::create_str(++_uid, {begin, end}, s.str.location());
+				<< " matched: \"" << token << "\"" << std::endl;
+			return &_parser_ctx->create_tok_node(token);
 		} else {
-			log_trace() << "leaf " << leaf << " didn't match: " << "\"" << util::get_str_line(s.str.str()) << "\"" << std::endl;
+			log_trace() << "leaf " << leaf << " didn't match: " << "\"" << token << "\"" << std::endl;
 			auto msg = util::f(
 				"Expected ",
 				leaf.str(),
 				" but got ",
-				"\"",
-				util::get_str_line(util::escape_str(s.str.str())),
-				"\""
+				token
 			);
 			return _set_failure(KError::codegen(msg));
 		}

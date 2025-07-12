@@ -1,173 +1,209 @@
 #include "AbsoluteSolver.hpp"
 
-#include <algorithm>
-#include <iterator>
 #include <string>
 #include <variant>
 #include <vector>
+#include <memory>
 
 #include "util/KError.hpp"
 #include "util/log.hpp"
 #include "util/PrintTools.hpp"
 
-namespace cg {
-	util::Result<AbsoluteSolver, KError> AbsoluteSolver::setup(
-		const CfgContext &context,
-		const std::string &root
+namespace cg::abs {
+	StackElement::StackElement() = default;
+
+	StackElement::StackElement(StackElement const &other): _value(other._value) {}
+
+	StackElement::StackElement(StackElement &&other): _value(std::move(other._value)) {}
+
+	StackElement::StackElement(AstNode &node):
+		_value(&node)
+	{}
+
+	StackElement &StackElement::operator=(StackElement const &other) {
+		_value = other._value;
+		return *this;
+	}
+
+	StackElement &StackElement::operator=(StackElement &&other) {
+		_value = std::move(other._value);
+		return *this;
+	}
+
+	StackElement::StackElement(uint32_t table_state):
+		_value(table_state)
+	{}
+
+	bool StackElement::is_table_state() const {
+		return std::holds_alternative<uint32_t>(_value);
+	}
+
+	uint32_t StackElement::table_state() const {
+		log_assert(std::holds_alternative<uint32_t>(_value), "tabestate must hold uint32_t");
+		return std::get<uint32_t>(_value);
+	}
+
+	bool StackElement::is_node() const {
+		log_assert(std::holds_alternative<AstNode*>(_value), "tablestate must hold astnode");
+		return std::holds_alternative<AstNode*>(_value);
+	}
+
+	AstNode const &StackElement::node() const {
+		log_assert(std::holds_alternative<AstNode*>(_value), "tablestate must hold astnode");
+		return *std::get<AstNode*>(_value);
+	}
+
+	AstNode &StackElement::node() {
+		log_assert(std::holds_alternative<AstNode*>(_value), "tablestate must hold astnode");
+		return *std::get<AstNode*>(_value);
+	}
+
+
+	std::ostream &StackElement::debug(std::ostream &os) const {
+		if (is_table_state()) {
+			return os << table_state();
+		} else if (is_node()) {
+			return os << node();
+		} else {
+			return os << "UNKNOWN";
+		}
+	}
+
+	util::Result<AbsoluteSolver::Ptr, KError> AbsoluteSolver::create(
+		CfgContext::Ptr &&context
 	) {
-		auto r = AbsoluteSolver();
-		r._ctx = &context;
-		r._table = AbsoluteTable(context);
+		auto r = std::make_unique<AbsoluteSolver>();
+		r->_ctx = std::move(context);
 
-		auto initial = r._get_var(root);
+		for (auto &set : r->_ctx->cfg_rule_sets()) {
+			for (auto &rule : set.rules()) {
+				r->_rules.push_back(rule);
+			}
+		}
 
-		auto children = std::set<RulePos>();
-		r._drill(initial, children);
-		r._add_state(r._get_var(root));
+		r->_table = AbsoluteTable(*r->_ctx);
+
+		auto initial = r->_get_var(r->_ctx->get_root()->name());
+
+		r->_add_state(initial);
 
 		return r;
 	}
 
 	void AbsoluteSolver::print_table(
-		std::ostream &os,
-		std::set<char> const &chars
+		std::ostream &os
 	) {
-		return _table.print(os, chars);
+		auto rule_strs = std::vector<std::string>();
+		for (auto &set : _ctx->cfg_rule_sets()) {
+			for (auto &rule : set.rules()) {
+				rule_strs.push_back("<" + set.name() + "> -> " + rule.str());
+			}
+		}
+		os << util::plist_enumerated(rule_strs, true);
+
+		return _table.print(os);
 	}
 
-	util::Result<AstNode, KError> AbsoluteSolver::parse(
-		std::string const &str,
-		std::string const &root_name,
-		std::string const &filename
+	util::Result<AstNode*, KError> AbsoluteSolver::parse(
+		util::StringRef const &str,
+		ParserContext &parser_ctx
 	) {
 		try {
+			auto &tokens = parser_ctx.get_tokens(str);
+			uint32_t node_id=0;
 			// uint32_t is the current state
 			auto stack = std::vector<StackElement>();
-			uint32_t cur_state_id=0;
-			auto c = str.begin();
-			auto prev_rule_set = std::optional<uint32_t>();
-			while (c != str.end()) {
-				uint32_t action;
-				if (prev_rule_set) {
-					action = _table.lookup_ruleset(cur_state_id, *prev_rule_set);
-					prev_rule_set = std::nullopt;
-				} else {
-					action = _table.lookup_char(cur_state_id, *c);
+			stack.push_back(0);
+			auto t = tokens.begin();
+			while (1) {
+				log_assert(stack.back().is_table_state(), "Stack must end with a state");
+				uint32_t cur_state_id = stack.back().table_state();
+				auto cur_t = t->type();
+				log_trace() << "state is " << cur_state_id << std::endl;
+				log_trace() << "Looking up \"" << Token::type_str(cur_t) << "\"" << std::endl;
+				uint32_t action = _table.lookup_tok(cur_state_id, cur_t);
+				if (action == 0) {
+					return KError::codegen(util::f(
+						"Unexpected token: ", *t, " at ", t->loc(),
+						" when parsing ", _table.row_state(cur_state_id)
+					));
 				}
+				log_trace() << "action: " << _table.action_str(action) << std::endl;
 
-				log_debug() << "action: " << _table.action_str(action) << std::endl;
-
-				if (action & AbsoluteTable::REDUCE_MASK) {
+				if (action == AbsoluteTable::ACCEPT_ACTION) {
+					log_trace() << "Accepting" << std::endl;
+					break;
+				} else if (action & AbsoluteTable::REDUCE_MASK) {
 					uint32_t production_rule_id = action & ~AbsoluteTable::REDUCE_MASK;
-					cur_state_id = _reduce(stack, production_rule_id, cur_state_id);
-					prev_rule_set = _get_rule_set_id(production_rule_id);
+					_reduce(
+						stack,
+						production_rule_id,
+						node_id,
+						parser_ctx
+					);
 				} else {
-					stack.push_back(StackElement(cur_state_id, CfgLeaf::character(*c)));
-					log_debug() << "shifted character: " << *c << std::endl;
-					cur_state_id = action;
-					c++;
+					if (cur_t == Token::Type::Eof) {
+						return KError::codegen("Reached EOF unexpectedly");
+					}
+					//TODO: update source location
+					stack.push_back(StackElement(
+							parser_ctx.create_tok_node(*t)
+					));
+					log_trace() << "shifted token: " << *t << std::endl;
+					stack.push_back(StackElement(action)); // push back the next state
+					t++;
 				}
-				log_debug() << "state is " << cur_state_id << std::endl;
 			}
-			log_assert(stack.size() == 1, "Stack must contain 1 element");
-			log_assert(stack.back().is_node(), "Stack must contain a node");
-			return stack.back().node();
+			if (stack.size() != 3) {
+				log_debug() << "stack is " << util::plist(stack) << std::endl;
+				return KError::codegen("Stack must contain 3 elements");
+			}
+			if (!stack[1].is_node()) {
+				return KError::codegen("The second element must be a node");
+			}
+			return &stack[1].node();
 		} catch_kerror;
 	}
 
-	AbsoluteSolver::StackElement::StackElement():
-	_state_id(0),
-	_value(CfgLeaf())
-	{}
-
-	AbsoluteSolver::StackElement::StackElement(
-		uint32_t state_id,
-		CfgLeaf const &leaf
-	) {
-		_state_id = state_id;
-		_value = leaf;
+	CfgContext const &AbsoluteSolver::cfg() const {
+		return *_ctx;
 	}
 
-	AbsoluteSolver::StackElement::StackElement(
-		uint32_t state_id,
-		AstNode const &node
-	) {
-		_state_id = state_id;
-		_value = node;
+	CfgContext &AbsoluteSolver::cfg() {
+		return *_ctx;
 	}
 
-	uint32_t AbsoluteSolver::StackElement::state_id() const {
-		return _state_id;
-	}
-
-	CfgLeaf const &AbsoluteSolver::StackElement::leaf() const {
-		return std::get<CfgLeaf>(_value);
-	}
-
-	CfgLeaf &AbsoluteSolver::StackElement::leaf() {
-		return std::get<CfgLeaf>(_value);
-	}
-
-	bool AbsoluteSolver::StackElement::is_leaf() const {
-		return std::holds_alternative<CfgLeaf>(_value);
-	}
-
-	AstNode const &AbsoluteSolver::StackElement::node() const {
-		return std::get<AstNode>(_value);
-	}
-
-	AstNode &AbsoluteSolver::StackElement::node(){
-		return std::get<AstNode>(_value);
-	}
-
-	bool AbsoluteSolver::StackElement::is_node() const {
-		return std::holds_alternative<AstNode>(_value);
-	}
-
-	std::ostream &AbsoluteSolver::StackElement::debug(std::ostream &os) const {
-		os << "(" << _state_id << ") ";
-		if (is_node()){
-			os << node();
-		} else {
-			os << leaf();
-		}
-		return os;
-	}
-
-	uint32_t AbsoluteSolver::_reduce(
+	void AbsoluteSolver::_reduce(
 		std::vector<StackElement> &stack,
 		uint32_t rule_id,
-		uint32_t cur_state_id
+		uint32_t &node_id,
+		ParserContext &parser_ctx
 	){
-		auto &debug = log_debug();
-		debug << "Reducing stack: " << util::plist(stack) << " -> ";
-
 		auto &rule = _get_rule(rule_id);
-		auto popped = std::vector<StackElement>();
+		log_trace() << "Reducing rule " << rule_id << std::endl;
+		log_assert(rule.leaves().size() <= stack.size() * 2 + 1, "Stack must contain enough elements for the rule");
+		auto &new_node = parser_ctx.create_rule_node(_ctx->cfg_rule_sets()[rule.set_id()].name());
+		for (uint32_t i = stack.size() - rule.leaves().size() * 2; i < stack.size(); i += 2) {
+			new_node.add_child(stack[i].node());
+		}
 		for (uint32_t i = 0; i < rule.leaves().size(); i++) {
-			popped.push_back(stack.back());
+			stack.pop_back();
 			stack.pop_back();
 		}
-		uint32_t TODO = 0;
-		auto TODO2 = util::FileLocation();
-		auto node = AstNode::create_rule(TODO, rule.str(), TODO2);
 
-		for (int i = popped.size()-1; i >= 0; i--){
-			auto &p = popped[i];
-			if (p.is_node()) {
-				node.add_child(p.node());
-			} else {
-				log_assert(p.leaf().type() == CfgLeaf::Type::character, "CfgLeaf must be a character");
-				node.add_child(AstNode::create_str(TODO, p.leaf().str(), TODO2));
-			}
-		}
-		stack.push_back(StackElement(cur_state_id, node));
-		debug << util::plist(stack) << std::endl;
-		return popped.back().state_id();
+		auto cur_state_id = stack.back().table_state();
+		auto cur_rule_set = rule.set_id();
+		auto next_state_id = _table.lookup_ruleset(cur_state_id, cur_rule_set);
+
+		log_trace() << "state is " << cur_state_id << std::endl;
+		log_trace() << "Looking up <" << _ctx->cfg_rule_sets()[cur_rule_set].name() << ">" << std::endl;
+
+		stack.push_back(StackElement(new_node));
+		stack.push_back(StackElement(next_state_id));
 	}
 
-	uint32_t AbsoluteSolver::_add_state(StateRule const &state_rule) {
-		log_debug() << "Adding state: " << _table.state_str(state_rule) << std::endl;
+	uint32_t AbsoluteSolver::_add_state(TableState const &state_rule) {
+		log_debug() << "Adding state: " << util::trim(state_rule.str()) << std::endl;
 		if (_table.contains_row(state_rule)) return _table.row_id(state_rule);
 
 		auto new_state = _table.row(state_rule);
@@ -177,139 +213,71 @@ namespace cg {
 
 		//Do not check a character. Instead reduce.
 		//Right now, can only reduce if it is the only rule in a group
-		if (_has_end_of_rule(unsorted_rules)) {
-			if (unsorted_rules.size() != 1) {
-				log_error() << "Can't generate without a lookahead" << std::endl;;
-			}
+		auto end_rules = unsorted_rules.find_ends();
+		if (end_rules.size() == 1) {
+			log_debug() << "Adding reduction for " << end_rules.front().str() << std::endl;
 			for (auto &s : new_state) {
-				s = _get_rule_id(*unsorted_rules.begin()) | AbsoluteTable::REDUCE_MASK;
+				s = _get_rule_id(end_rules.front()) | AbsoluteTable::REDUCE_MASK;
 			}
-			return new_state_id;
+		} else if (end_rules.size() > 1) {
+			log_fatal_error() << "Multiple end rules for state: " << state_rule << std::endl;
 		}
 
 		//group by leaf type. We already handeled positions at the end a rule so we
 		//don't need to handle that
 		auto groups = _group_rules(unsorted_rules);
 		for (auto &[leaf, rules] : groups) {
+			
 			log_assert(
-				leaf.type() == CfgLeaf::Type::character || leaf.type() == CfgLeaf::Type::var,
+				leaf.type() != CfgLeaf::Type::empty,
 				"CfgContext must be simplified before using AbsoluteSolver"
 			);
 
-			log_debug() << "Stepping step:" << std::endl << _state_str(rules);
+			auto next = rules.step();
 
-			auto next = _step_state_rule(rules);
-
-			log_debug() << "Stepped step with leaf:" << leaf << std::endl << _state_str(next);
-
-			auto next_i = _add_state(next);
-
-			if (leaf.type() == CfgLeaf::Type::character) {
-				_table.lookup_char(state_rule, leaf.str_content()[0]) = next_i;
+			if (leaf.type() == CfgLeaf::Type::token) {
+				if (leaf.token_type() == Token::Type::Eof) {
+					_table.lookup_tok(state_rule, leaf.token_type()) = AbsoluteTable::ACCEPT_ACTION;
+				} else {
+					_table.lookup_tok(state_rule, leaf.token_type()) = _add_state(next);
+				}
 			} else {
-				_table.lookup_ruleset(state_rule, _ctx->rule_id(leaf.var_name())) = next_i;
+				_table.lookup_ruleset(state_rule, _ctx->rule_id(leaf.var_name())) = _add_state(next);
 			}
 		}
 
 		return new_state_id;
 	}
 
-	bool AbsoluteSolver::_has_end_of_rule(StateRule const &state) const {
-		for (auto &pos : state) {
-			if (_is_end_pos(pos)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool AbsoluteSolver::_is_end_pos(RulePos const &pos) const {
-		return pos.offset >= _get_rule(pos).leaves().size();
-	}
-
-	AbsoluteSolver::StateRule AbsoluteSolver::_step_state_rule(StateRule const &state) {
-		auto r = StateRule();
-		for (auto rule : state) {
-			rule.offset++;
-			r.insert(rule);
-		}
-		return r;
-	}
-
-	CfgRuleSet const &AbsoluteSolver::_get_set(RulePos const &pos) const {
-		auto &sets = _ctx->cfg_rule_sets();
-
-		log_assert(sets.size() > pos.set, "Invalid set position inside RulePos");
-
-		return sets[pos.set];
-	}
-
 	uint32_t AbsoluteSolver::_get_rule_id(RulePos const &pos) {
-		uint32_t r = 1;
-		auto &target = _get_rule(pos);
+		// One indexed to keep things consistent with other references in this file
+		uint32_t result = 1;
+		uint32_t set_i=0;
 		for (auto &set : _ctx->cfg_rule_sets()) {
-			for (auto &rule : set.rules()) {
-				if (rule == target) return r;
-				r++;
+			if (pos.set_index() > set_i) {
+				set_i++;
+				result += set.rules().size();
+			} else {
+				result += pos.rule_index();
+				break;
 			}
 		}
-
-		log_fatal_error() << "No matching rule position in the contex" << std::endl;
-		return r;
+		log_assert(_rules[result-1] == pos.rule(), "_rules does not match layout of cfg_rule_sets");
+		return result;
 	}
 
 	CfgRule const &AbsoluteSolver::_get_rule(uint32_t id) {
 		log_assert(id != 0, "Can't get rule for id 0");
-		uint32_t r = 1;
-		for (auto &set : _ctx->cfg_rule_sets()) {
-			for (auto &rule : set.rules()) {
-				if (r == id) return rule;
-				r++;
-			}
-		}
-
-		log_fatal_error() << "No matching rule id in contex" << std::endl;
-		return _ctx->cfg_rule_sets()[0].rules()[0];
+		return _rules[id-1];
 	}
 
-	CfgRule const &AbsoluteSolver::_get_rule(RulePos const &pos) const {
-		auto &rules = _get_set(pos).rules();
-
-		log_assert(rules.size() > pos.rule, "Invalid rule position inside RulePos");
-
-		return rules[pos.rule];
-	}
-
-	uint32_t AbsoluteSolver::_get_rule_set_id(uint32_t rule_id) const {
-		log_assert(rule_id != 0, "Can't get rule for id 0");
-		uint32_t r = 1;
-		uint32_t set_id = 0;
-		for (auto &set : _ctx->cfg_rule_sets()) {
-			for (auto &rule : set.rules()) {
-				if (r == rule_id) return set_id;
-				r++;
-			}
-			set_id++;
-		}
-		log_fatal_error() << "No matching rule id in context" << std::endl;
-		return 0;
-	}
-
-	CfgLeaf const &AbsoluteSolver::_get_leaf(RulePos const &pos) const {
-		auto &leaves = _get_rule(pos).leaves();
-
-		log_assert(leaves.size() > pos.offset, "Invalid leaf position inside RulePos");
-
-		return leaves[pos.offset];
-	}
-
-	std::set<RulePos> AbsoluteSolver::_get_var(std::string const &str) {
-		auto r = std::set<RulePos>();
+	TableState AbsoluteSolver::_get_var(std::string const &str) {
+		auto r = TableState();
 		for (uint32_t i = 0; i < _ctx->cfg_rule_sets().size(); i++) {
 			auto &set = _ctx->cfg_rule_sets()[i];
 			if (set.name() == str) {
 				for (uint32_t j = 0; j < set.rules().size(); j++) {
-					r.insert({i, j, 0});
+					r.add_rule(RulePos(i, j, 0, *_ctx));
 				}
 				return r;
 			}
@@ -319,73 +287,58 @@ namespace cg {
 		return {};
 	}
 
-	std::string AbsoluteSolver::_rule_str(RulePos const &pos) const {
-		auto r = std::string();
-		auto &rule = _get_rule(pos);
-		int i = 0;
-		for (auto &leaf : rule.leaves()) {
-			if (i == pos.offset) {
-				r += "|";
-			}
-			r += leaf.str();
-			i++;
-		}
-		if (pos.offset >= rule.leaves().size()) {
-			r += "|";
-		}
-		return r;
-	}
-
-	std::string AbsoluteSolver::_state_str(StateRule const &state) const {
+	std::string AbsoluteSolver::_state_str(TableState const &state) const {
 		auto r = std::string();
 		for (auto &rule : state) {
-			r += _rule_str(rule) + "\n";
+			r += rule.str() + "\n";
 		}
 		return r;
 	}
 
 	void AbsoluteSolver::_drill(
-		std::set<RulePos> const &start,
-		std::set<RulePos> &children,
+		TableState const &start,
+		TableState &children,
 		bool is_root
 	) {
 		for (auto &rule : start) {
-			if (_is_end_pos(rule)) {
-				children.insert(rule);
+			if (rule.is_end()) {
+				children.add_rule(rule);
 				continue;
 			}
-			auto &leaf = _get_leaf(rule);
+			auto &leaf = rule.leaf();
 			if (leaf.type() == CfgLeaf::Type::var) {
 				if (!is_root) {
-					children.insert(rule);
+					children.add_rule(rule);
 				}
 				auto all_children = _get_var(leaf.var_name());
-				auto unique_children = std::set<RulePos>();
-				std::set_difference(
-					all_children.begin(), all_children.end(),
-					children.begin(), children.end(),
-					std::inserter(unique_children, unique_children.begin())
-				);
+				auto unique_children = TableState();
+				for (auto &pos : all_children) {
+					if (!children.contains(pos)) {
+						unique_children.add_rule(pos);
+					}
+				}
 
 				_drill(unique_children, children, false);
 			} else {
-				children.insert(rule);
+				children.add_rule(rule);
 			}
 		}
 	}
 
-	std::set<RulePos> AbsoluteSolver::_drill(std::set<RulePos> const &start) {
-		auto r = std::set<RulePos>();
+	TableState AbsoluteSolver::_drill(TableState const &start) {
+		auto r = TableState();
 		_drill(start, r, false);
 		return r;
 	}
 
 	std::vector<AbsoluteSolver::RuleGroup> AbsoluteSolver::_group_rules(
-		std::set<RulePos> const &children
+		TableState const &children
 	) {
 		auto r = std::vector<AbsoluteSolver::RuleGroup>();
+		if (children.empty()) return r;
 		for (auto &child : children) {
-			auto &leaf = _get_leaf(child);
+			if (child.is_end()) continue;
+			auto &leaf = child.leaf();
 			RuleGroup *matched = nullptr;
 			for (auto &group : r) {
 				if (group.leaf == leaf) {
@@ -398,12 +351,8 @@ namespace cg {
 				matched->leaf = leaf;
 			}
 			log_assert(matched, "matched must be initialized.");
-			matched->rules.insert(child);
+			matched->rules.add_rule(child);
 		}
 		return r;
-	}
-
-	std::ostream &operator<<(std::ostream &os, AbsoluteSolver::StackElement const &e) {
-		return e.debug(os);
 	}
 }

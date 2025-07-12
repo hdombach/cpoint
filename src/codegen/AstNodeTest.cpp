@@ -4,13 +4,15 @@
 #include "SParser.hpp"
 #include "util/log.hpp"
 #include "AstNode.hpp"
+#include "util/StringRef.hpp"
 
 #include <fstream>
 
 namespace cg {
 	class AstNodeTest: TestFixture {
 		public:
-			AstNodeTest(Test &test, size_t variant): TestFixture(test), _cfg(), _parser(_cfg) {
+			AstNodeTest(Test &test, size_t variant): TestFixture(test) {
+				_parser = SParser::create(CfgContext::create());
 				_should_simplify = variant;
 			}
 			//Make sure you don't copy this because parser has pointer to cfg.
@@ -19,108 +21,103 @@ namespace cg {
 			std::string suite_name() { return "UNKNOWN"; }
 			static size_t variant_count() { return 2; }
 
-			CfgContext &cfg() { return _cfg; }
-			SParser &parser() { return _parser; }
+			CfgContext &cfg() { return _parser->cfg(); }
+			Parser &parser() { return *_parser; }
 
-			auto match(std::string const &str, std::string const &root) {
+			auto match(std::string const &str) {
 				if (!_is_prepped) {
-					_cfg.prep();
+					_parser->cfg().prep();
 					if (_should_simplify) {
-						_cfg.simplify();
+						_parser->cfg().simplify();
 					}
 
 					_is_prepped = true;
 				}
-				return _parser.match(str, root);
+				auto file = "temp-file-" + std::to_string(count++);
+				return _parser->match(util::StringRef(str.c_str(), file.c_str()));
 			}
 
 		private:
 			bool _should_simplify;
-			CfgContext _cfg;
-			SParser _parser;
+			Parser::Ptr _parser;
 			bool _is_prepped = false;
+			uint32_t count;
 	};
 
 	TEST_F(AstNodeTest, match_literals) {
 		auto &c = f.cfg();
+		using T = Token::Type;
 
 		log_debug() << "size: " << c.cfg_rule_sets().size() << std::endl;
-		c.prim("hello") = c.s("Hello");
+		c.root("root") = c["hello"] + T::Eof;
+		c.prim("hello") = T::Unmatched;
 		log_debug() << "size: " << c.cfg_rule_sets().size() << std::endl;
 
-		EXPECT(c.prep());
+		c.prep().value();
 
-		EXPECT_EQ(f.match("Hello", "hello").value(), 5);
-		EXPECT_KERROR(f.match("hello", "hello"), KError::Type::CODEGEN);
+		EXPECT_EQ(f.match("Hello").value(), 5);
+		EXPECT_KERROR(f.match("{\% %}"), KError::Type::CODEGEN);
 	}
 
 	TEST_F(AstNodeTest, match_number) {
 		auto &c = f.cfg();
+		using T = Token::Type;
 
-		c.prim("digit") = c.i("0123456789");
-		c.prim("integer")
-			= c["digit"] + c["integer"]
-			| c.s("");
-		c.prim("decimal") = c["integer"] + c.s(".") + c["integer"];
+		c.root("root") = c["exp"] + T::Eof;
+		c.prim("integer") = T::IntConst | c.empty();
+		c.prim("decimal")
+			= c["integer"] + T::Period + c["integer"];
+		c.prim("exp") = T::ExpB + c["decimal"] + T::ExpE;
 
 		EXPECT(c.prep());
 
-		EXPECT_EQ(f.match("1", "digit").value(), 1);
-		EXPECT_KERROR(f.match("abc5", "digit"), KError::Type::CODEGEN);
-
-		EXPECT_KERROR(f.match("145a", "integer"), KError::Type::CODEGEN);
-		EXPECT_EQ(f.match("145", "integer").value(), 3);
-		EXPECT_KERROR(f.match("abc5", "integer"), KError::Type::CODEGEN);
-		EXPECT_EQ(f.match("91023", "integer").value(), 5);
-
-		EXPECT_KERROR(f.match("491f", "decimal"), KError::Type::CODEGEN);
-		EXPECT_KERROR(f.match("hello", "decimal"), KError::Type::CODEGEN);
-		EXPECT_EQ(f.match("192.", "decimal").value(), 4);
-		EXPECT_EQ(f.match(".89141", "decimal").value(), 6);
-		EXPECT_KERROR(f.match("..123", "decimal"), KError::Type::CODEGEN);
-		EXPECT_EQ(f.match(".", "decimal").value(), 1);
-		EXPECT_EQ(f.match("15.9", "decimal").value(), 4);
+		EXPECT_KERROR(f.match("{{491f}}"), KError::Type::CODEGEN);
+		EXPECT_KERROR(f.match("{{hello}}"), KError::Type::CODEGEN);
+		EXPECT_EQ(f.match("{{192.}}").value(), 8);
+		EXPECT_EQ(f.match("{{.89141}}").value(), 10);
+		EXPECT_KERROR(f.match("{{..123}}"), KError::Type::CODEGEN);
+		EXPECT_EQ(f.match("{{.}}").value(), 5);
+		EXPECT_EQ(f.match("{{15.9}}").value(), 8);
 	}
 
 	TEST_F(AstNodeTest, match_math) {
 		auto &c = f.cfg();
+		using T = Token::Type;
 
-		c.prim("digit") =
-			c.s("0") | c.s("1") | c.s("2") | c.s("3") | c.s("4") |
-			c.s("5") | c.s("6") | c.s("7") | c.s("8") | c.s("9");
-		c.prim("integer")
-			= c["digit"] + c["integer"]
-			| c.s("");
+		c.prim("integer") = T::IntConst | c.empty();
 		c.prim("decimal")
-			= c["integer"] + c.s(".") + c["integer"]
+			= c["integer"] + T::Period + c["integer"]
 			| c["integer"];
 		c.prim("exp_sing") = c["decimal"];
 		c.prim("exp_inc_dec")
-			= c.s("+") + c["exp_inc_dec"]
-			| c.s("-") + c["exp_inc_dec"]
-			| c.s("!") + c["exp_inc_dec"]
+			= T::Plus + c["exp_inc_dec"]
+			| T::Minus + c["exp_inc_dec"]
+			| T::Excl + c["exp_inc_dec"]
 			| c["exp_sing"];
 		c.prim("exp_mult_div")
-			= c["exp_inc_dec"] + c.s("*") + c["exp_mult_div"]
-			| c["exp_inc_dec"] + c.s("/") + c["exp_mult_div"]
-			| c["exp_inc_dec"] + c.s("%") + c["exp_mult_div"]
+			= c["exp_inc_dec"] + T::Mult + c["exp_mult_div"]
+			| c["exp_inc_dec"] + T::Div + c["exp_mult_div"]
+			| c["exp_inc_dec"] + T::Perc + c["exp_mult_div"]
 			| c["exp_inc_dec"];
 		c.prim("exp_add_sub")
-			= c["exp_mult_div"] + c.s("+") + c["exp_add_sub"]
-			| c["exp_mult_div"] + c.s("-") + c["exp_add_sub"]
+			= c["exp_mult_div"] + T::Plus + c["exp_add_sub"]
+			| c["exp_mult_div"] + T::Minus + c["exp_add_sub"]
 			| c["exp_mult_div"];
 		c.prim("exp") = c["exp_add_sub"];
 
-		EXPECT(c.prep());
+		c.prim("e") = T::ExpB + c["exp"] + T::ExpE;
+		c.root("root") = c["e"] + T::Eof;
 
-		EXPECT_EQ(f.match("1", "exp").value(), 1);
-		EXPECT_EQ(f.match("42.1", "exp").value(), 4);
-		EXPECT_EQ(f.match("192.12+41", "exp").value(), 9);
-		EXPECT_EQ(f.match("192.12+41-0.12", "exp").value(), 14);
-		EXPECT_EQ(f.match("19*1.0", "exp").value(), 6);
-		EXPECT_EQ(f.match("19/1.0*20", "exp").value(), 9);
-		EXPECT_EQ(f.match("5+2*12", "exp").value(), 6);
-		EXPECT_EQ(f.match("5+-2*-+-12", "exp").value(), 10);
+		c.prep().value();
+
+		EXPECT_EQ(f.match("{{1}}").value(), 5);
+		EXPECT_EQ(f.match("{{42.1}}").value(), 8);
+		EXPECT_EQ(f.match("{{192.12+41}}").value(), 13);
+		EXPECT_EQ(f.match("{{192.12+41-0.12}}").value(), 18);
+		EXPECT_EQ(f.match("{{19*1.0}}").value(), 10);
+		EXPECT_EQ(f.match("{{19/1.0*20}}").value(), 13);
+		EXPECT_EQ(f.match("{{5+2*12}}").value(), 10);
+		EXPECT_EQ(f.match("{{5+-2*-+-12}}").value(), 14);
 	}
 
 /*

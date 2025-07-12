@@ -1,48 +1,58 @@
 
 #include "AbsoluteSolver.hpp"
+#include "codegen/CfgContext.hpp"
 #include "tests/Test.hpp"
+#include "util/log.hpp"
+#include <fstream>
 
 namespace cg {
 	TEST(AbsoluteSolver, debug_print) {
-		auto c = CfgContext();
-		c.prim("S") = c["E"] + c.s("\x7f");
-		c.prim("E") = c["E"] + c.s("*") + c["B"];
-		c.prim("E") = c["E"] + c.s("+") + c["B"];
+		auto ctx = CfgContext::create();
+		auto &c = *ctx;
+		using T = Token::Type;
+
+		c.root("root") = c["S"] + T::Eof; 
+		c.prim("S") = T::ExpB + c["E"] + T::ExpE;
+		c.prim("E") = c["E"] + T::Mult + c["B"];
+		c.prim("E") = c["E"] + T::Plus + c["B"];
 		c.prim("E") = c["B"];
-		c.prim("B") = c.s("0");
-		c.prim("B") = c.s("1");
+		c.prim("B") = T::IntConst;
+		c.prep().value();
 		c.simplify();
 
-		auto solver = AbsoluteSolver::setup(c, "S");
-		solver->print_table(log_debug() << "\n", {'*', '+', '0', '1'});
-		solver->parse("1+1", "S");
+		auto solver = std::move(AbsoluteSolver::create(std::move(ctx)).value());
+		ParserContext result;
+		auto node = solver->parse(util::StringRef("{{1*1+2}}"), result).value();
+
+		auto ss = std::stringstream();
+		node->print_pre_order(ss);
+		EXPECT_EQ(ss.str(), "S ExpB E E E B IntConstant Multiply B IntConstant Plus B IntConstant ExpE ");
+
+		//std::ofstream file("gen/ast-test.gv");
+		//node->print_dot(file, "ast-test");
+		std::ofstream table("gen/table.txt");
+		solver->print_table(table);
 	}
 
 	TEST(AbsoluteSolver, simplify_strings) {
-		auto c = CfgContext();
+		auto ctx = CfgContext::create();
+		auto &c = *ctx;
+		using T = Token::Type;
 
-		c.prim("opening") = c.s("< ");
-		c.prim("closing") = c.s(" >");
-		c.prim("message") = c["opening"] + c.s("Hello world") + c["closing"];
+		c.root("root") = c["message"] + T::Eof;
+		c.prim("opening") = T::Great;
+		c.prim("closing") = T::Less;
+		c.prim("message") = c["opening"] + T::Ident + c["closing"] + T::Eof;
 
-		c.prep();
+		c.prep().value();
 		log_debug() << "before simplifying:\n" << c << std::endl;
 		c.simplify();
 		log_debug() << "after simplifying:\n" << c << std::endl;
 
-		auto solver = AbsoluteSolver::setup(c, "message");
-		solver->print_table(log_debug() << "\n", {' ', '<', '>', 'H', 'e', 'l', 'o', 'r', 'd'});
-	}
-
-	TEST(AbsoluteSolver, simplify_sets) {
-		auto c = CfgContext();
-
-		c.prim("digit-pair") = c.i("0123456789") + c.s(".") + c.i("1234567890");
-		c.prim("str") = c.s("\"") + c.e("\"") + c.s("\"");
-
-		c.prep();
-		c.simplify();
-
-		auto solver = AbsoluteSolver::setup(c, "digit-pair");
+		auto solver = std::move(AbsoluteSolver::create(std::move(ctx)).value());
+		//auto node = solver->parse(util::StringRef"")
+		
+		//std::ofstream file("gen/ast-test.gv");
+		//node->print_dot(file, "ast-test");
 	}
 }

@@ -1,5 +1,5 @@
 #pragma once
 
-#include "codegen/SParser.hpp"
+#include "codegen/Parser.hpp"
 
-util::Result<cg::SParser, KError> create_parser();
+util::Result<cg::Parser::Ptr, KError> create_parser();

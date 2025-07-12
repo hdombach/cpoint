@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <string>
 #include <memory>
 #include <array>
@@ -9,7 +11,7 @@
 
 namespace util {
 	template<typename Contains, typename Element>
-	bool contains(Contains &container, Element &element) {
+	bool contains(Contains const &container, Element const &element) {
 		return std::find(container.begin(), container.end(), element) != container.end();
 	}
 
@@ -66,6 +68,9 @@ namespace util {
 		auto res = std::string();
 		for (auto c : str) {
 			switch (c) {
+				case '\x03':
+					res += "^C";
+					break;
 				case '\a':
 					res += "\\a";
 					break;
@@ -111,6 +116,26 @@ namespace util {
 		}
 		return res;
 	}
+
+	inline std::string trim(std::string const &str) {
+		if (str.empty()) return str;
+		auto begin = str.data();
+		auto end = str.data()+str.size()-1;
+		while (end >= str.data() && std::isspace(*end)) {
+			end--;
+		}
+		while (*begin && std::isspace(*end)) {
+			begin++;
+		}
+		return {begin, end+1};
+	}
+
+	template<typename T>
+		inline std::string trim(T const &t) {
+			auto ss = std::stringstream();
+			ss << t;
+			return trim(ss.str());
+		}
 
 	/**
 	 * @brief Tests whether a ptr exists

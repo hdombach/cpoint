@@ -6,6 +6,8 @@
 #include "util/FileLocation.hpp"
 #include "util/KError.hpp"
 #include "util/result.hpp"
+#include "util/StringRef.hpp"
+#include "Tokenizer.hpp"
 
 namespace cg {
 	/**
@@ -16,30 +18,35 @@ namespace cg {
 	 * A string literal contains the string that is consumed.
 	 */
 
+	class AstNodeIterator;
 	class AstNode {
 		public:
 			enum class Type {
 				None,
 				Rule,
-				String
+				Leaf
 			};
 		public:
 			AstNode();
+
+			AstNode(AstNode const &other);
+			AstNode(AstNode &&other);
+
+			AstNode &operator=(AstNode const &other);
+			AstNode &operator=(AstNode &&other);
 			/**
 			 * @brief Create an astnode based on a rule
 			 */
 			static AstNode create_rule(
 				uint32_t id,
-				std::string const &cfg_name,
-				util::FileLocation const &file_location
+				std::string const &cfg_name
 			);
 			/**
 			 * @brief Create an astnode containg a string literal
 			 */
-			static AstNode create_str(
+			static AstNode create_tok(
 				uint32_t id,
-				std::string const &str,
-				util::FileLocation const &file_location
+				Token const &token
 			);
 
 			Type type() const { return _type; }
@@ -48,13 +55,18 @@ namespace cg {
 			bool has_value() const;
 			operator bool() const { return has_value(); }
 
-			std::vector<AstNode> const &children() const { return _children; }
+			AstNodeIterator begin();
+			AstNodeIterator end();
+			AstNodeIterator begin() const;
+			AstNodeIterator end() const;
 
-			void add_child(AstNode const &node);
+			void add_child(AstNode &node);
 
-			util::Result<AstNode, KError> child_with_cfg(std::string const &name) const;
+			util::Result<AstNode*, KError> child_with_cfg(std::string const &name) const;
 
-			std::vector<AstNode> children_with_cfg(std::string const &name) const;
+			std::vector<AstNode*> children_with_cfg(std::string const &name) const;
+
+			util::Result<AstNode*, KError> child_with_tok(Token::Type type) const;
 
 			/**
 			 * @brief The rule that was used to generate this node
@@ -62,13 +74,15 @@ namespace cg {
 			 */
 			std::string const &cfg_rule() const { return _cfg_rule; }
 
-			std::string const &consumed() const { return _consumed; }
+			Token const &tok() const;
 			std::string consumed_all() const;
 
 			/**
-			 * @brief Number of characters by this node and any children node
+			 * @brief The number of leaf nodes
 			 */
-			size_t size() const;
+			size_t leaf_count() const;
+
+			size_t child_count() const;
 
 			util::FileLocation location() const;
 
@@ -77,40 +91,40 @@ namespace cg {
 			 */
 			void compress(std::set<std::string> const &cfg_names);
 
-			AstNode compressed(
-				std::set<std::string> const &cfg_names
-			) const;
-
 			/**
-			 * @brief Trims nodes that do not have children or consumed characters
+			 * @brief Trims nodes that do not have children or consumed tokens
 			 */
 			void trim();
-			/**
-			 * @brief Trims node that do not have children or consumed characters
-			 */
-			AstNode trimmed() const;
 
+			void remove_children(std::set<std::string> const &cfg_names);
+
+			std::ostream &print_debug(std::ostream &os) const;
 			std::ostream &print_pre_order(std::ostream &os) const;
 			std::ostream &print_dot(std::ostream &os, std::string const &name) const;
 
+			std::string str() const;
 			std::string str_pre_order() const;
 
 		private:
+			friend class AstNodeIterator;
 			Type _type;
 			uint32_t _id;
 			std::string _cfg_rule;
-			std::string _consumed;
-			util::FileLocation _location;
-			std::vector<AstNode> _children;
+			Token const *_token=nullptr;
 
-			/**
-			 * @brief The cached size
-			 */
-			mutable size_t _size;
+			// Use linked list to reduce number of reallocations.
+			// All AstNodes are reserved in a pool in ParserContext to reduce fragmantation.
+			AstNode *_sibling_prev=nullptr;
+			AstNode *_sibling_next=nullptr;
+			AstNode *_child_head=nullptr;
+			AstNode *_child_tail=nullptr;
 
 		private:
-			size_t _calc_size() const;
 			void _print_dot_attributes(std::ostream &os) const;
 			void _print_dot_paths(std::ostream &os) const;
 	};
+
+	inline std::ostream &operator<<(std::ostream &os, AstNode const &node) {
+		return node.print_debug(os);
+	}
 }
