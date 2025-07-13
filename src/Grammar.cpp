@@ -22,7 +22,8 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 			= c["declaration"] + T::SemiColon + c["whitespace"]
 			| c["declaration"] + T::Equal + c["whitespace"] + c["expression"] + T::SemiColon + c["whitespace"];
 
-		c.prim("declaration") = T::Int + c["whitespace"] + c["decl1"];
+		c.prim("declaration") = T::Int + c["whitespace"] + c["decl"];
+		c.prim("decl") = c["decl1"];
 
 		c.temp("decl1")
 			= c["decl2"] + c["decl1_append"];
@@ -36,10 +37,12 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 			| c["decl_cin"]
 			| c["decl_dec"]
 			| c["decl_inc"]
+			| c["decl_ptr"]
 			| c["decl_sing"];
 
 		c.temp("decl_sing")
-			= T::Ident + c["whitespace"];
+			= T::Ident + c["whitespace"]
+			| T::ParanOpen + c["whitespace"] + c["decl"] + T::ParanClose + c["whitespace"];
 
 		c.prim("decl_jmp") = T::JmpPtr + c["whitespace"];
 		c.prim("decl_ternary") = T::TernPtr + c["whitespace"];
@@ -48,6 +51,7 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 		c.prim("decl_cin") = T::ReadPtr + c["decl2"];
 		c.prim("decl_dec") = T::DecPtr + c["decl2"];
 		c.prim("decl_inc") = T::IncPtr + c["decl2"];
+		c.prim("decl_ptr") = T::Ptr + c["decl2"];
 
 		c.prim("expression") = T::Digit;
 

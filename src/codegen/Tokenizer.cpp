@@ -24,6 +24,8 @@ namespace cg {
 		const char *names[] = {
 			"Unknown",
 			"Int",
+			"ParanOpen",
+			"ParanClose",
 			"SemiColon",
 			"Equal",
 			"Ptr",
@@ -66,6 +68,8 @@ namespace cg {
 	std::vector<std::regex> _token_table{
 		std::regex(""),
 		std::regex("int"),
+		std::regex("\\("),
+		std::regex("\\)"),
 		std::regex(";"),
 		std::regex("="),
 		std::regex("\\*"),

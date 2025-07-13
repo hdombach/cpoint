@@ -11,6 +11,8 @@ namespace cg {
 			enum Type: int {
 				Unknown,
 				Int,
+				ParanOpen,
+				ParanClose,
 				SemiColon,
 				Equal,
 				Ptr,

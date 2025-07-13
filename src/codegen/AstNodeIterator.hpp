@@ -1,3 +1,5 @@
+#pragma once
+
 #include "AstNode.hpp"
 
 namespace cg {
