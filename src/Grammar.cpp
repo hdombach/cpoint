@@ -47,13 +47,17 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 		c.prim("decl_jmp") = T::JmpPtr + c["whitespace"];
 		c.prim("decl_ternary") = T::TernPtr + c["whitespace"];
 
-		c.prim("decl_cout") = T::WritePtr + c["decl2"];
-		c.prim("decl_cin") = T::ReadPtr + c["decl2"];
-		c.prim("decl_dec") = T::DecPtr + c["decl2"];
-		c.prim("decl_inc") = T::IncPtr + c["decl2"];
-		c.prim("decl_ptr") = T::Ptr + c["decl2"];
+		c.prim("decl_cout") = T::WritePtr + c["whitespace"] + c["decl2"];
+		c.prim("decl_cin") = T::ReadPtr + c["whitespace"] + c["decl2"];
+		c.prim("decl_dec") = T::DecPtr + c["whitespace"] + c["decl2"];
+		c.prim("decl_inc") = T::IncPtr + c["whitespace"] + c["decl2"];
+		c.prim("decl_ptr") = T::Ptr + c["whitespace"] + c["decl2"];
 
-		c.prim("expression") = T::Digit;
+		c.prim("expression")
+			= T::Ptr + c["whitespace"] + c["expression"]
+			| T::Amper + c["whitespace"] + c["expression"]
+			| T::ParanOpen + c["whitespace"] + c["expression"] + T::ParanClose + c["whitespace"]
+			| T::Ident + c["whitespace"];
 
 		TRY(c.prep());
 		c.simplify();

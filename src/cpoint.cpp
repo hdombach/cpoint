@@ -27,11 +27,11 @@ int main(int argc, char **argv) {
 	node.compress(parser->cfg().prim_names());
 	node.remove_children({"whitespace"});
 	node.trim();
-	//node.print_dot(std::cout, "Program output");
+	node.print_dot(std::cout, "Program output");
 
 	for (auto &statement : node) {
 		auto decl = statement.child_with_cfg("declaration").value();
 		auto type = CPType::create(*decl);
-		log_event() << type << std::endl;
+		//log_event() << type << std::endl;
 	}
 }

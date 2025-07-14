@@ -15,6 +15,7 @@ namespace cg {
 				ParanClose,
 				SemiColon,
 				Equal,
+				Amper,
 				Ptr,
 				IncPtr,
 				DecPtr,
