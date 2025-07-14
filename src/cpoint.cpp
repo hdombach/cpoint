@@ -1,15 +1,17 @@
+#include <fstream>
+#include <iostream>
+
 #include "CPType.hpp"
 #include "Grammar.hpp"
 #include "util/file.hpp"
 #include "codegen/AstNode.hpp"
 #include "codegen/AstNodeIterator.hpp"
 #include "util/log.hpp"
-#include <fstream>
-#include <iostream>
+#include "SymbolTable.hpp"
 
 int main(int argc, char **argv) {
 
-	//util::g_log_flags |= util::Importance::DEBUG;
+	util::g_log_flags |= util::Importance::DEBUG;
 
 	if (argc != 2) {
 		std::cout << "Provide file: " << std::endl;
@@ -27,11 +29,7 @@ int main(int argc, char **argv) {
 	node.compress(parser->cfg().prim_names());
 	node.remove_children({"whitespace"});
 	node.trim();
-	node.print_dot(std::cout, "Program output");
-
-	for (auto &statement : node) {
-		auto decl = statement.child_with_cfg("declaration").value();
-		auto type = CPType::create(*decl);
-		//log_event() << type << std::endl;
-	}
+	//node.print_dot(std::cout, "Program output");
+	
+	log_debug() << SymbolTable::create(node) << std::endl;
 }

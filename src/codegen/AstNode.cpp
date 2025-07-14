@@ -254,7 +254,6 @@ namespace cg {
 		for (auto &child : *this) {
 			child.remove_children(cfg_names);
 			if (cfg_names.contains(child.cfg_rule())) {
-				log_debug() << "removing child " << std::endl;
 				if (child._sibling_prev) {
 					child._sibling_prev->_sibling_next = child._sibling_next;
 					if (child._sibling_next == nullptr) {
