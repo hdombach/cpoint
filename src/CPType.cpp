@@ -37,6 +37,10 @@ std::ostream &CPType::print(std::ostream &os) const {
 	return os << util::plist(pointer_types);
 }
 
+bool CPType::is_lvalue() const {
+	return pointer_types.empty();
+}
+
 const char *CPType::pointer_type_str(PointerType type) {
 	switch (type) {
 		case Normal:

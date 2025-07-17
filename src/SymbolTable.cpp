@@ -20,6 +20,9 @@ Symbol::Symbol(uint32_t address, cg::AstNode const &node) {
 	_name = _find_name(node).value();
 	_type = CPType::create(node);
 	_address = address;
+	if (node.child_count() == 4) {
+		_expression = &node.begin()[2];
+	}
 }
 
 uint32_t Symbol::address() const {
@@ -28,6 +31,10 @@ uint32_t Symbol::address() const {
 
 std::string const &Symbol::name() const {
 	return _name;
+}
+
+cg::AstNode const *Symbol::expression() const {
+	return _expression;
 }
 
 std::ostream &Symbol::print(std::ostream &os) const {
@@ -53,4 +60,24 @@ std::ostream &SymbolTable::print(std::ostream &os) const {
 		os << symbol;
 	}
 	return os;
+}
+
+Symbol *SymbolTable::begin() {
+	return _symbols.data();
+}
+
+Symbol *SymbolTable::end() {
+	return _symbols.data() + _symbols.size();
+}
+
+size_t SymbolTable::size() const {
+	return _symbols.size();
+}
+
+Symbol &SymbolTable::operator[](uint32_t i) {
+	return _symbols[i];
+}
+
+size_t SymbolTable::symbol_index(std::string const &name) const {
+	return _symbol_map.at(name);
 }

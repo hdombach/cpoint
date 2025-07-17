@@ -134,3 +134,11 @@ KError KError::codegen(std::string msg, FLoc loc) {
 		loc
 	);
 }
+
+KError KError::compile(std::string msg, FLoc loc) {
+	return KError(
+		COMPILE,
+		util::f("Compile error: ", msg),
+		loc
+	);
+}

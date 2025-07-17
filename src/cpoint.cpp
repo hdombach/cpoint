@@ -8,6 +8,7 @@
 #include "codegen/AstNodeIterator.hpp"
 #include "util/log.hpp"
 #include "SymbolTable.hpp"
+#include "ByteCode.hpp"
 
 int main(int argc, char **argv) {
 
@@ -29,7 +30,12 @@ int main(int argc, char **argv) {
 	node.compress(parser->cfg().prim_names());
 	node.remove_children({"whitespace"});
 	node.trim();
-	//node.print_dot(std::cout, "Program output");
+
+	auto node_file = std::ofstream("./assets/example1.dot");
+	node.print_dot(node_file, "Program output");
+	node_file.close();
 	
-	log_debug() << SymbolTable::create(node) << std::endl;
+	//auto table = SymbolTable::create(node);
+	//log_debug() << table << std::endl;
+	std::cout << ByteCode::create(node).value();
 }

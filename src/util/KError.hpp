@@ -32,6 +32,7 @@ class KError: public std::exception {
 			INVALID_ARG,
 			INTERNAL,
 			CODEGEN,
+			COMPILE,
 		};
 
 		KError();
@@ -57,6 +58,7 @@ class KError: public std::exception {
 		static KError invalid_arg(std::string msg, FLoc=SLoc::current());
 		static KError internal(std::string msg, FLoc=SLoc::current());
 		static KError codegen(std::string msg, FLoc=SLoc::current());
+		static KError compile(std::string msg, FLoc=SLoc::current());
 
 	private:
 		Type _type;

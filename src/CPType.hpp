@@ -20,6 +20,8 @@ struct CPType {
 		static CPType create(cg::AstNode const &node);
 		std::ostream &print(std::ostream &os) const;
 
+		bool is_lvalue() const;
+
 		std::vector<PointerType> pointer_types;
 
 		static const char *pointer_type_str(PointerType type);

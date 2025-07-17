@@ -54,10 +54,17 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 		c.prim("decl_ptr") = T::Ptr + c["whitespace"] + c["decl2"];
 
 		c.prim("expression")
-			= T::Ptr + c["whitespace"] + c["expression"]
-			| T::Amper + c["whitespace"] + c["expression"]
+			= c["exp_deref"]
+			| c["exp_address"]
 			| T::ParanOpen + c["whitespace"] + c["expression"] + T::ParanClose + c["whitespace"]
-			| T::Ident + c["whitespace"];
+			| c["exp_ident"];
+
+		c.prim("exp_deref")
+			= T::Ptr + c["whitespace"] + c["expression"];
+		c.prim("exp_address")
+			= T::Amper + c["whitespace"] + c["expression"];
+		c.prim("exp_ident")
+			= T::Ident + c["whitespace"];
 
 		TRY(c.prep());
 		c.simplify();
