@@ -7,6 +7,7 @@
 #include "SymbolTable.hpp"
 
 enum Command: uint8_t {
+	Next,
 	Load,
 	Set,
 	Deref,

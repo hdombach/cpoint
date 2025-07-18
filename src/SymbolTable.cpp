@@ -22,6 +22,8 @@ Symbol::Symbol(uint32_t address, cg::AstNode const &node) {
 	_address = address;
 	if (node.child_count() == 4) {
 		_expression = &node.begin()[2];
+	} else {
+		_expression = nullptr;
 	}
 }
 
