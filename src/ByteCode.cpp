@@ -96,13 +96,47 @@ util::Result<CPType, KError> ByteCode::_compile_exp(cg::AstNode const &node) {
 			log_debug() << "about to log " << ident_name << std::endl;
 			_load_commamnd(_table.symbol_index(ident_name), _commands);
 
-			auto child_type = CPType();
-			child_type.pointer_types.push_back(CPType::PointerType::Normal);
-			return child_type;
+			auto &symbol = _table[ident_name];
+			auto type = symbol.type();
+			type.pointer_types.push_back(CPType::PointerType::Normal);
+			return type;
 		} else if (cfg_name == "exp_ident") {
 			auto ident_name = node.begin()[0].tok().content();
 			_load_commamnd(_table.symbol_index(ident_name), _commands);
 			_commands.push_back(Command::Deref);
+			return _table[ident_name].type();
+		} else if (cfg_name == "exp_deref") {
+			auto type = _compile_exp(node.begin()[1]).value();
+			if (type.pointer_types.size() == 0) {
+				return KError::compile("Cannot deref again");
+			}
+			switch (type.pointer_types.back()) {
+				case CPType::Normal:
+					_commands.push_back(Deref);
+					break;
+				case CPType::Incriment:
+					_commands.push_back(Inc);
+					break;
+				case CPType::Decriment:
+					_commands.push_back(Dec);
+					break;
+				case CPType::Jump:
+					_commands.push_back(Jump);
+					break;
+				case CPType::Ternary:
+					_commands.push_back(Tern);
+					break;
+				case CPType::Read:
+					_commands.push_back(Read);
+					break;
+				case CPType::Write:
+					_commands.push_back(Write);
+					break;
+			}
+			type.pointer_types.pop_back();
+			return type;
+		} else {
+			return KError::compile(util::f("Unimplimented node ", node.cfg_rule()));
 		}
 		return CPType();
 	} catch_kerror;

@@ -39,6 +39,10 @@ cg::AstNode const *Symbol::expression() const {
 	return _expression;
 }
 
+CPType const &Symbol::type() const {
+	return _type;
+}
+
 std::ostream &Symbol::print(std::ostream &os) const {
 	return os << _name << "@" << std::hex << _address << ": " << _type << std::endl;
 }
@@ -78,6 +82,10 @@ size_t SymbolTable::size() const {
 
 Symbol &SymbolTable::operator[](uint32_t i) {
 	return _symbols[i];
+}
+
+Symbol &SymbolTable::operator[](std::string const &name) {
+	return _symbols[symbol_index(name)];
 }
 
 size_t SymbolTable::symbol_index(std::string const &name) const {

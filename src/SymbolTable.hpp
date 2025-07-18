@@ -16,6 +16,7 @@ class Symbol {
 		uint32_t address() const;
 		std::string const &name() const;
 		cg::AstNode const *expression() const;
+		CPType const &type() const;
 
 		std::ostream &print(std::ostream &os) const;
 
@@ -38,6 +39,7 @@ class SymbolTable {
 
 		size_t size() const;
 		Symbol &operator[](uint32_t i);
+		Symbol &operator[](std::string const &name);
 		size_t symbol_index(std::string const &name) const;
 	private:
 		std::vector<Symbol> _symbols;
