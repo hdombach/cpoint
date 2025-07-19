@@ -20,9 +20,14 @@ util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
 				code._commands.push_back(Set);
 				code._commands.push_back(Next);
 			}
+
+			if (auto value = code._eval_comptime(*exp)) {
+				code._initial_values.push_back({i, value.value()});
+			}
 		} else {
 			code._commands.push_back(Next);
 		}
+
 	}
 
 	return code;
@@ -31,14 +36,15 @@ util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
 void _load_commamnd(uint32_t i, std::vector<Command> &commands) {
 	commands.push_back(Command::Load);
 	for (uint8_t j = 0; j < 4; j++) {
-		commands.push_back(static_cast<Command>(i << j & 0xf));
+		commands.push_back(static_cast<Command>((i >> j * 8) & 0xf));
+		log_debug() << "pushed " << static_cast<uint32_t>(commands.back()) << std::endl;
 	}
 }
 
 uint32_t _get_constant(uint32_t index, std::vector<Command> const &commands) {
 	uint32_t r = 0;
-	for (uint8_t j = 0; j < 4; j++) {
-		r += commands[index + j] >> j;
+	for (int j = 0; j < 4; j++) {
+		r += commands[index + j] >> (j * 8);
 	}
 	return r;
 }
@@ -46,7 +52,11 @@ uint32_t _get_constant(uint32_t index, std::vector<Command> const &commands) {
 
 std::ostream &ByteCode::print(std::ostream &os) const {
 	size_t i = 0;
-	os << "ByteCode" << std::endl;
+	os << "Initial values:" << std::endl;
+	for (auto &[position, value] : _initial_values) {
+		os << "mem[" << position << "] = " << value << std::endl;
+	}
+	os << "ByteCode:" << std::endl;
 	while (i < _commands.size()) {
 		os << _commands[i];
 		if (_commands[i] == Command::Load) {
@@ -82,6 +92,19 @@ const char *ByteCode::command_str(Command c) {
 			return "read";
 		case Write:
 			return "write";
+	}
+}
+
+util::Result<uint32_t, void> ByteCode::_eval_comptime(cg::AstNode const &node) {
+	auto &cfg_name = node.cfg_rule();
+	if (cfg_name == "expression") {
+		return _eval_comptime(node.begin()[0]);
+	} else if (cfg_name == "exp_address") {
+		auto identifier = node.begin()[1].begin()[0].begin()[0];
+		auto ident_name = identifier.tok().content();
+		return _table.symbol_index(ident_name);
+	} else {
+		return {};
 	}
 }
 

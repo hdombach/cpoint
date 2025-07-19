@@ -34,8 +34,9 @@ class ByteCode {
 		SymbolTable _table;
 		std::vector<Command> _commands;
 		std::vector<uint32_t> _line_indexes;
+		std::vector<std::pair<uint32_t, uint32_t>> _initial_values;
 
-		static util::Result<uint32_t, void> _eval_comptime(cg::AstNode const &node);
+		util::Result<uint32_t, void> _eval_comptime(cg::AstNode const &node);
 
 		util::Result<CPType, KError> _compile_exp(cg::AstNode const &node);
 };
