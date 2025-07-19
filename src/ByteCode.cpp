@@ -8,16 +8,21 @@
 util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
 	auto code = ByteCode();
 	code._table = SymbolTable::create(tree);
+	log_debug() << "loaded table " << code._table << std::endl;
 
 	for (uint32_t i = 0; i < code._table.size(); i++) {
 		auto exp = code._table[i].expression();
 		log_debug() << "parsing exp " << exp << std::endl;
 		if (exp) {
 			code._line_indexes.push_back(code._commands.size());
-			code._compile_exp(*exp).value();
-			code._commands.push_back(Set);
+			auto type = code._compile_exp(*exp).value();
+			if (type.pointer_types.empty() || type.pointer_types.back() != CPType::Jump) {
+				code._commands.push_back(Set);
+				code._commands.push_back(Next);
+			}
+		} else {
+			code._commands.push_back(Next);
 		}
-		code._commands.push_back(Next);
 	}
 
 	return code;
@@ -122,6 +127,9 @@ util::Result<CPType, KError> ByteCode::_compile_exp(cg::AstNode const &node) {
 					break;
 				case CPType::Jump:
 					_commands.push_back(Jump);
+					if (type.pointer_types.size() > 1) {
+						return KError::compile("Cannot have pointers beyond a jump pointer");
+					}
 					break;
 				case CPType::Ternary:
 					_commands.push_back(Tern);
@@ -133,7 +141,9 @@ util::Result<CPType, KError> ByteCode::_compile_exp(cg::AstNode const &node) {
 					_commands.push_back(Write);
 					break;
 			}
-			type.pointer_types.pop_back();
+			if (type.pointer_types.back() != CPType::Jump) {
+				type.pointer_types.pop_back();
+			}
 			return type;
 		} else {
 			return KError::compile(util::f("Unimplimented node ", node.cfg_rule()));

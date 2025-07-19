@@ -30,6 +30,7 @@ void _add_type(CPType &type, cg::AstNode const &node) {
 CPType CPType::create(cg::AstNode const &node) {
 	auto t = CPType();
 	_add_type(t, node);
+	std::reverse(t.pointer_types.begin(), t.pointer_types.end());
 	return t;
 }
 
