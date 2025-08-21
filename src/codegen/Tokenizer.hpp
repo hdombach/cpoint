@@ -26,6 +26,7 @@ namespace cg {
 				Whitespace,
 				Ident,
 				Digit,
+				Comment,
 				Eof,
 			};
 

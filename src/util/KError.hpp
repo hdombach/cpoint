@@ -7,6 +7,7 @@
 
 #include "util/log.hpp"
 #include "util/FileLocation.hpp"
+#include "util/result.hpp"
 
 
 class KError: public std::exception {
@@ -81,5 +82,15 @@ inline std::ostream& log_fatal_error(KError const &err) {
 
 inline std::ostream& log_error(KError const &err) {
 	return log_error(err.loc()) << err;
+}
+
+template<typename T>
+inline std::ostream& log_error(util::Result<T, KError> const &err) {
+	return log_error(err.error().loc()) << err.error();
+}
+
+template<typename T>
+inline std::ostream& log_fatal_error(util::Result<T, KError> const &err) {
+	return log_fatal_error(err.error().loc()) << err.error();
 }
 

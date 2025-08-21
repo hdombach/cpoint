@@ -17,6 +17,11 @@ util::Result<std::string, void> _find_name(cg::AstNode const &node) {
 }
 
 Symbol::Symbol(uint32_t address, cg::AstNode const &node) {
+	if (auto n = _find_name(node)) {
+		_name = n.value();
+	} else {
+		log_fatal_error() << "Cannot find symbol name in node " << node << std::endl;
+	}
 	_name = _find_name(node).value();
 	_type = CPType::create(node);
 	_address = address;
@@ -44,7 +49,7 @@ CPType const &Symbol::type() const {
 }
 
 std::ostream &Symbol::print(std::ostream &os) const {
-	return os << _name << "@" << std::hex << _address << ": " << _type << std::endl;
+	return os << _name << "@" << std::hex << _address << std::dec << ": " << _type << std::endl;
 }
 
 SymbolTable SymbolTable::create(cg::AstNode const &node) {
@@ -52,6 +57,7 @@ SymbolTable SymbolTable::create(cg::AstNode const &node) {
 	uint32_t addr = 0;
 	auto table = SymbolTable();
 	for (auto &child : node) {
+		if (child.cfg_rule() != "statement") continue;
 		auto symbol = Symbol(addr, child);
 
 		table._symbol_map[symbol.name()] = table._symbols.size();
@@ -89,5 +95,6 @@ Symbol &SymbolTable::operator[](std::string const &name) {
 }
 
 size_t SymbolTable::symbol_index(std::string const &name) const {
+	log_assert(_symbol_map.contains(name), util::f("Unknown symbol: ", name));
 	return _symbol_map.at(name);
 }

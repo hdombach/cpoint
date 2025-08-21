@@ -39,6 +39,7 @@ namespace cg {
 			"Whitespace",
 			"Ident",
 			"Digit",
+			"Comment",
 			"EOF",
 		};
 		return names[type];
@@ -82,8 +83,9 @@ namespace cg {
 		std::regex(">>"),
 		std::regex("<<"),
 		std::regex("\\s+"),
-		std::regex("[a-zA-Z]\\w*"),
+		std::regex("[_a-zA-Z]\\w*"),
 		std::regex("\\d+"),
+		std::regex("\\/\\/[^\\n]*"),
 		std::regex(""),
 	};
 

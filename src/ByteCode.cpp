@@ -3,41 +3,15 @@
 #include "SymbolTable.hpp"
 #include "codegen/AstNodeIterator.hpp"
 #include "CPType.hpp"
+#include "util/PrintTools.hpp"
 #include "util/log.hpp"
 
-util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
-	auto code = ByteCode();
-	code._table = SymbolTable::create(tree);
-	log_debug() << "loaded table " << code._table << std::endl;
-
-	for (uint32_t i = 0; i < code._table.size(); i++) {
-		auto exp = code._table[i].expression();
-		log_debug() << "parsing exp " << exp << std::endl;
-		if (exp) {
-			code._line_indexes.push_back(code._commands.size());
-			auto type = code._compile_exp(*exp).value();
-			if (type.pointer_types.empty() || type.pointer_types.back() != CPType::Jump) {
-				code._commands.push_back(Set);
-				code._commands.push_back(Next);
-			}
-
-			if (auto value = code._eval_comptime(*exp)) {
-				code._initial_values.push_back({i, value.value()});
-			}
-		} else {
-			code._commands.push_back(Next);
-		}
-
-	}
-
-	return code;
-};
-
 void _load_commamnd(uint32_t i, std::vector<Command> &commands) {
+	//log_debug() << "loading value " << i << std::endl;
 	commands.push_back(Command::Load);
 	for (uint8_t j = 0; j < 4; j++) {
-		commands.push_back(static_cast<Command>((i >> j * 8) & 0xf));
-		log_debug() << "pushed " << static_cast<uint32_t>(commands.back()) << std::endl;
+		commands.push_back(static_cast<Command>((i >> (j * 8)) & 0xff));
+		//log_debug() << "pushed " << static_cast<uint32_t>(commands.back()) << std::endl;
 	}
 }
 
@@ -49,6 +23,111 @@ uint32_t _get_constant(uint32_t index, std::vector<Command> const &commands) {
 	return r;
 }
 
+util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
+	try {
+		auto code = ByteCode();
+		code._table = SymbolTable::create(tree);
+		log_debug() << "loaded table " << code._table << std::endl;
+
+		for (uint32_t i = 0; i < code._table.size(); i++) {
+			auto exp = code._table[i].expression();
+			log_debug() << "parsing exp " << exp << std::endl;
+			code._line_indexes.push_back(code._commands.size());
+			if (exp) {
+				auto type = code._compile_exp(*exp).value();
+				if (type.pointer_types.empty() || type.pointer_types.back() != CPType::Jump) {
+					code._commands.push_back(Set);
+					code._commands.push_back(Next);
+				}
+
+				if (auto value = code._eval_comptime(*exp)) {
+					code._initial_values.push_back({i, value.value()});
+				}
+			} else {
+				code._commands.push_back(Next);
+			}
+
+		}
+
+		return code;
+	} catch_kerror;
+};
+
+void ByteCode::execute() {
+	auto memory = Memory();
+	for (auto &[position, value] : _initial_values) {
+		log_debug() << "init @" << position << " = " << value << std::endl;
+		memory[position] = value;
+	}
+
+	uint32_t reg;
+	//program counter
+	uint32_t pc = 0;
+	uint32_t cur_addr = 0;
+	bool running = true;
+	while (pc < _commands.size()) {
+		auto command = _commands[pc];
+		switch (command) {
+			case Command::Next:
+				cur_addr++;
+				log_trace() << "line: " << cur_addr << std::endl;
+				break;
+			case Command::Load:
+				reg = _get_constant(pc+1, _commands);
+				pc += 4;
+				log_trace() << "reg = " << reg << std::endl;
+				break;
+			case Command::Set:
+				memory[cur_addr] = reg;
+				log_trace() << "@" << cur_addr << " = reg(" << reg << ")" << std::endl;
+				break;
+			case Command::Deref:
+				if (reg == 0) {
+					pc = _commands.size(); // Manually stop
+					log_trace() << "stopping" << std::endl;
+				} else {
+					auto &trace = log_trace() << "derefencing *" << reg;
+					reg = memory[reg];
+					trace << " -> " << reg << std::endl;
+				}
+				break;
+			case Command::Inc:
+				memory[reg]++;
+				reg = memory[reg];
+				log_trace() << "incrimented " << reg << std::endl;
+				break;
+			case Command::Dec:
+				memory[reg]--;
+				reg = memory[reg];
+				log_trace() << "decrimented " << reg << std::endl;
+				break;
+			case Command::Jump:
+				pc = _line_indexes[reg]-1;
+				cur_addr = reg;
+				log_trace() << "jumping to  " << reg << " ( pc = " << pc << ")" << std::endl;
+				break;
+			case Command::Tern:
+				if (memory[cur_addr-1] == 0) {
+					reg = memory[reg];
+					log_trace() << "tern true: " << reg << std::endl;
+				} else {
+					log_trace() << "tern false: " << reg << std::endl;
+				}
+				break;
+			case Command::Read:
+				std::cin >> reg;
+				log_trace() << "Read value: " << reg << std::endl;
+				break;
+			case Command::Write:
+				std::cout << static_cast<int>(reg);
+				log_trace() << "write reg " << reg << std::endl;
+				reg = memory[reg];
+				break;
+		}
+		pc++;
+	}
+}
+
 
 std::ostream &ByteCode::print(std::ostream &os) const {
 	size_t i = 0;
@@ -58,6 +137,7 @@ std::ostream &ByteCode::print(std::ostream &os) const {
 	}
 	os << "ByteCode:" << std::endl;
 	while (i < _commands.size()) {
+		os << i << ") ";
 		os << _commands[i];
 		if (_commands[i] == Command::Load) {
 			os << " " << _get_constant(i+1, _commands);
@@ -67,6 +147,9 @@ std::ostream &ByteCode::print(std::ostream &os) const {
 		}
 		os << std::endl;
 	}
+
+	os << util::plist(_line_indexes) << std::endl;
+
 	return os;
 }
 
@@ -151,7 +234,7 @@ util::Result<CPType, KError> ByteCode::_compile_exp(cg::AstNode const &node) {
 				case CPType::Jump:
 					_commands.push_back(Jump);
 					if (type.pointer_types.size() > 1) {
-						return KError::compile("Cannot have pointers beyond a jump pointer");
+						//return KError::compile("Cannot have pointers beyond a jump pointer", node.location());
 					}
 					break;
 				case CPType::Ternary:

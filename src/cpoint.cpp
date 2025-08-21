@@ -12,7 +12,8 @@
 
 int main(int argc, char **argv) {
 
-	util::g_log_flags |= util::Importance::DEBUG;
+	util::g_log_flags |= util::Importance::TRACE | util::Importance::DEBUG;
+	//util::g_log_flags |= util::Importance::DEBUG;
 
 	if (argc != 2) {
 		std::cout << "Provide file: " << std::endl;
@@ -37,5 +38,12 @@ int main(int argc, char **argv) {
 	
 	//auto table = SymbolTable::create(node);
 	//log_debug() << table << std::endl;
-	std::cout << ByteCode::create(node).value();
+	//std::cout << ByteCode::create(node).value();
+	
+	if (auto c = ByteCode::create(node)) {
+		log_debug() << c.value() << std::endl;
+		c->execute();
+	} else {
+		log_error(c);
+	}
 }

@@ -16,6 +16,7 @@ util::Result<cg::Parser::Ptr, KError> create_parser() {
 
 		c.temp("statements")
 			= c["statement"] + c["statements"]
+			| T::Comment + c["whitespace"] + c["statements"]
 			| c.empty();
 
 		c.prim("statement")
