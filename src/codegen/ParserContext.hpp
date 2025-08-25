@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 
 #include "util/StringRef.hpp"
 #include "Tokenizer.hpp"
@@ -21,8 +22,12 @@ namespace cg {
 			AstNode &create_rule_node(std::string const &cfg_name);
 			AstNode &create_node();
 
+			std::string_view get_line(util::FileLocation const &location);
+			std::string_view get_line(Token const &token);
+
 		private:
 			struct FileItem {
+				std::string filename;
 				std::string source;
 				std::vector<Token> tokens;
 			};
@@ -30,7 +35,7 @@ namespace cg {
 			uint32_t _node_id=0;
 			uint32_t _node_count;
 			uint32_t _bank_count=100;
-			std::map<std::string, FileItem> _items;
+			std::map<std::string, FileItem> _files;
 			std::vector<std::vector<AstNode>> _node_bank;
 
 	};

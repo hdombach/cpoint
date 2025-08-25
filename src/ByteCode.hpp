@@ -5,6 +5,7 @@
 #include "util/KError.hpp"
 #include "codegen/AstNode.hpp"
 #include "SymbolTable.hpp"
+#include "codegen/ParserContext.hpp"
 
 enum Command: uint8_t {
 	Next,
@@ -23,7 +24,7 @@ class ByteCode {
 	public:
 		ByteCode() = default;
 
-		static util::Result<ByteCode, KError> create(cg::AstNode const &tree);
+		static util::Result<ByteCode, KError> create(cg::AstNode const &tree, cg::ParserContext &p_context);
 
 		void execute();
 
@@ -31,6 +32,7 @@ class ByteCode {
 		static const char *command_str(Command c);
 
 	private:
+		cg::ParserContext *_context = nullptr;
 		SymbolTable _table;
 		std::vector<Command> _commands;
 		std::vector<uint32_t> _line_indexes;

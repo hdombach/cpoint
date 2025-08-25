@@ -66,8 +66,8 @@ namespace util {
 
 			void _next_newline() {
 				while (*_end != '\0') {
-					_end++;
 					if (*_end == '\n') return;
+					_end++;
 				}
 			}
 	};

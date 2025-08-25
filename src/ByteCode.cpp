@@ -23,9 +23,10 @@ uint32_t _get_constant(uint32_t index, std::vector<Command> const &commands) {
 	return r;
 }
 
-util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree) {
+util::Result<ByteCode, KError> ByteCode::create(const cg::AstNode &tree, cg::ParserContext &p_context) {
 	try {
 		auto code = ByteCode();
+		code._context = &p_context;
 		code._table = SymbolTable::create(tree);
 		log_debug() << "loaded table " << code._table << std::endl;
 
@@ -65,12 +66,18 @@ void ByteCode::execute() {
 	uint32_t pc = 0;
 	uint32_t cur_addr = 0;
 	bool running = true;
+	if (auto s = _table[cur_addr].statement()) {
+		log_trace() << "executing line: (" << pc << ") " << _context->get_line(s->location()) << std::endl;
+	}
 	while (pc < _commands.size()) {
 		auto command = _commands[pc];
 		switch (command) {
 			case Command::Next:
 				cur_addr++;
-				log_trace() << "line: " << cur_addr << std::endl;
+				if (auto s = _table[cur_addr].statement()) {
+		log_trace() << "executing line: (" << pc+1 << ") " << _context->get_line(s->location()) << std::endl;
+				}
+				//log_trace() << "line: " << cur_addr << std::endl;
 				break;
 			case Command::Load:
 				reg = _get_constant(pc+1, _commands);

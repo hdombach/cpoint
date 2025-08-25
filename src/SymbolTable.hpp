@@ -16,6 +16,7 @@ class Symbol {
 		uint32_t address() const;
 		std::string const &name() const;
 		cg::AstNode const *expression() const;
+		cg::AstNode const *statement() const;
 		CPType const &type() const;
 
 		std::ostream &print(std::ostream &os) const;
@@ -25,6 +26,7 @@ class Symbol {
 		CPType _type;
 		uint32_t _address;
 		cg::AstNode const *_expression;
+		cg::AstNode const *_statement;
 };
 
 class SymbolTable {

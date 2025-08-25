@@ -25,6 +25,7 @@ Symbol::Symbol(uint32_t address, cg::AstNode const &node) {
 	_name = _find_name(node).value();
 	_type = CPType::create(node);
 	_address = address;
+	_statement = &node;
 	if (node.child_count() == 4) {
 		_expression = &node.begin()[2];
 	} else {
@@ -42,6 +43,10 @@ std::string const &Symbol::name() const {
 
 cg::AstNode const *Symbol::expression() const {
 	return _expression;
+}
+
+cg::AstNode const *Symbol::statement() const {
+	return _statement;
 }
 
 CPType const &Symbol::type() const {

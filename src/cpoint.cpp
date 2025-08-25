@@ -39,8 +39,8 @@ int main(int argc, char **argv) {
 	//auto table = SymbolTable::create(node);
 	//log_debug() << table << std::endl;
 	//std::cout << ByteCode::create(node).value();
-	
-	if (auto c = ByteCode::create(node)) {
+
+	if (auto c = ByteCode::create(node, context)) {
 		log_debug() << c.value() << std::endl;
 		c->execute();
 	} else {
