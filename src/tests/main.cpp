@@ -1,4 +1,6 @@
 #include <vector>
+#include <cstring>
+#include <bitset>
 
 #include "Test.hpp"
 #include "util/log.hpp"

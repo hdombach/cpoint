@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "Args.hpp"
 #include "util/log.hpp"
 
