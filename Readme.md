@@ -40,10 +40,8 @@ The full list of pointers are listed below.
 | Normal | `int *value;` | No side effect |
 | Incriment | `int +value;` | Incriments the variable that is pointed too. |
 | Decriment | `int -value;` | Decriment the variable that is pointed too. |
-| Jump pointer | `int value^;` | Sets the program counter to the address value.\
-Effectively starts running from the variable pointed too. |
-| Ternary | `int *condition;` | Will only dereference if the |
-|         | `int value?;` | value before it is 0. |
+| Jump pointer | `int value^;` | Sets the program counter to the address value. Effectively starts running from the variable pointed too. |
+| Ternary | `int value?;` | Will only dereference if the value before it is 0. |
 | Read pointer | `int >>value;` | Read a value from stdin. Doesn't use the value that it is initialized with. |
 | Read pointer | `int <<value;` | Write the value it was initialized with to stdout. It will return a normal dereference which in most situations won't be helpful. |
 
