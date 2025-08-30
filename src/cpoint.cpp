@@ -9,23 +9,18 @@
 #include "util/log.hpp"
 #include "SymbolTable.hpp"
 #include "ByteCode.hpp"
+#include "Args.hpp"
 
 int main(int argc, char **argv) {
 
-	util::g_log_flags |= util::Importance::TRACE | util::Importance::DEBUG;
-	//util::g_log_flags |= util::Importance::DEBUG;
-
-	if (argc != 2) {
-		std::cout << "Provide file: " << std::endl;
-		return 1;
-	}
+	g_args.parse_args(argc, argv);
 
 	auto parser = std::move(create_parser().value());
 	auto context = cg::ParserContext();
-	auto f = std::ifstream(argv[1]);
+	auto f = std::ifstream(g_args.file);
 	auto src = util::readFile(f);
 	auto &node = *parser->parse(
-		util::StringRef(src.c_str(), argv[1]),
+		util::StringRef(src.c_str(), g_args.file.c_str()),
 		context
 	).value();
 	node.compress(parser->cfg().prim_names());

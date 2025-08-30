@@ -27,6 +27,7 @@ set(SOURCES
 	src/CPType.cpp
 	src/SymbolTable.cpp
 	src/ByteCode.cpp
+	src/Args.cpp
 )
 
 add_executable(cpoint ${SOURCES})

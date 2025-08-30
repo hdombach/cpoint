@@ -1,4 +1,5 @@
 #include "ByteCode.hpp"
+#include "Args.hpp"
 #include "Memory.hpp"
 #include "SymbolTable.hpp"
 #include "codegen/AstNodeIterator.hpp"
@@ -86,7 +87,7 @@ void ByteCode::execute() {
 				break;
 			case Command::Set:
 				memory[cur_addr] = reg;
-				log_trace() << "@" << cur_addr << " = reg(" << reg << ")" << std::endl;
+				log_trace() << "@" << cur_addr << " = reg (@" << cur_addr << " = " << reg << ")" << std::endl;
 				break;
 			case Command::Deref:
 				if (reg == 0) {
@@ -122,11 +123,21 @@ void ByteCode::execute() {
 				}
 				break;
 			case Command::Read:
-				std::cin >> reg;
+				if (g_args.mode == Args::Mode::Character) {
+					char c;
+					std::cin >> c;
+					reg = c;
+				} else {
+					std::cin >> reg;
+				}
 				log_trace() << "Read value: " << reg << std::endl;
 				break;
 			case Command::Write:
-				std::cout << static_cast<int>(reg);
+				if (g_args.mode == Args::Mode::Character) {
+					std::cout << static_cast<char>(reg);
+				} else {
+					std::cout << static_cast<int>(reg);
+				}
 				log_trace() << "write reg " << reg << std::endl;
 				reg = memory[reg];
 				break;
